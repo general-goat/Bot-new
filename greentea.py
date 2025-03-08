@@ -1,191 +1,212 @@
 import discord
 from discord.ext import commands
 from discord import app_commands
-import random
+import sqlite3
 import asyncio
+import random
 
 class GreenTea(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
-        self.active_game = False
-        self.registered_players = []
-        self.scores = {}
-        self.target_score = 0
-        self.reward = None
-        self.registration_time = 30
-        self.current_fragment = None
-        self.used_answers = set()  # Track used answers for the current fragment
+        self.green_tea_active = False
+        self.green_tea_players = []
+        self.green_tea_target_points = 10
+        self.used_words = set()
+        self.used_fragments = set()
+        self.common_fragments = [
+            "ing", "ed", "er", "est", "ly", "tion", "ment", "ness", "able", "ible",
+            "ful", "less", "ous", "al", "ive", "ic", "ish", "ant", "ent", "ism",
+            "ist", "ize", "ise", "age", "ance", "ence", "dom", "hood", "ship", "ty",
+            "ify", "ate", "en", "ify", "ify", "ify", "ify", "ify", "ify", "ify",
+            "acy", "ance", "ence", "ancy", "ency", "dom", "hood", "ism", "ist", "ity",
+            "ment", "ness", "ship", "sion", "tion", "ate", "en", "ify", "fy", "ize",
+            "ise", "able", "ible", "al", "ial", "ant", "ent", "ary", "ery", "ory",
+            "ful", "ic", "ical", "ish", "ive", "less", "ly", "ous", "eous", "ious",
+            "y", "al", "an", "ar", "ary", "ed", "en", "er", "est", "ful", "ic", "ing",
+            "ish", "ive", "less", "ly", "ment", "ness", "ous", "s", "y", "age", "ance",
+            "ence", "ancy", "ency", "dom", "hood", "ism", "ist", "ity", "ment", "ness",
+            "ship", "sion", "tion", "ate", "en", "ify", "fy", "ize", "ise", "able",
+            "ible", "al", "ial", "ant", "ent", "ary", "ery", "ory", "ful", "ic", "ical",
+            "ish", "ive", "less", "ly", "ous", "eous", "ious", "y", "al", "an", "ar",
+            "ary", "ed", "en", "er", "est", "ful", "ic", "ing", "ish", "ive", "less",
+            "ly", "ment", "ness", "ous", "s", "y", "age", "ance", "ence", "ancy", "ency",
+            "dom", "hood", "ism", "ist", "ity", "ment", "ness", "ship", "sion", "tion",
+            "ate", "en", "ify", "fy", "ize", "ise", "able", "ible", "al", "ial", "ant",
+            "ent", "ary", "ery", "ory", "ful", "ic", "ical", "ish", "ive", "less", "ly",
+            "ous", "eous", "ious", "y", "al", "an", "ar", "ary", "ed", "en", "er", "est",
+            "ful", "ic", "ing", "ish", "ive", "less", "ly", "ment", "ness", "ous", "s", "y"
+        ]
+        self.conn = sqlite3.connect("greentea.db")
+        self.cursor = self.conn.cursor()
+        self.setup_db()
 
-    # Slash command to start the game
-    @app_commands.command(name="greentea-start", description="Start the Green Tea game")
-    @app_commands.describe(
-        target="The target score to win the game (required)",
-        reward="The reward for the winner (optional)",
-        registration_time="The time (in seconds) for players to register (default: 30)"
-    )
-    async def greentea_start(self, interaction: discord.Interaction, target: int, reward: str = None, registration_time: int = 30):
-        if self.active_game:
-            await interaction.response.send_message("A game is already running!", ephemeral=True)
+    def setup_db(self):
+        self.cursor.execute("""
+            CREATE TABLE IF NOT EXISTS greentea_scores (
+                user_id INTEGER PRIMARY KEY,
+                wins INTEGER DEFAULT 0,
+                points INTEGER DEFAULT 0
+            )
+        """)
+        self.conn.commit()
+
+    @app_commands.command(name="greentea_start", description="Start a Green Tea game!")
+    @app_commands.describe(point_goal="Points needed to win (Default: 10)", reg_time="Registration time in seconds (Default: 30)")
+    async def greentea_start(self, interaction: discord.Interaction, point_goal: int = 10, reg_time: int = 30):
+        if self.green_tea_active:
+            await interaction.response.send_message("❌ A Green Tea game is already running!", ephemeral=True)
             return
 
-        self.active_game = True
-        self.target_score = target
-        self.reward = reward
-        self.registration_time = registration_time
-        self.registered_players = []
-        self.scores = {}
-        self.used_answers = set()
+        self.green_tea_active = True
+        self.green_tea_players = []
+        self.green_tea_target_points = point_goal
 
-        # Send the registration embed
-        embed = discord.Embed(title="🍵 Green Tea Game 🍵", color=discord.Color.green())
-        embed.add_field(name="Rules", value="""
-🔹 **React with 🍵 to join the game!**
-🔹 The game will start in **30 seconds**.
-
-📜 **Game Rules:**
-1️⃣ A word fragment will be given (e.g., `ing`)
-2️⃣ Reply with a real word containing that fragment (e.g., `King`)
-3️⃣ First, second, and third correct answers get points!
-
-🏆 **Scoring:**
-🥇 First: **5 points**
-🥈 Second: **3 points**
-🥉 Third: **1 point**
-
-🔸 **First to reach the target wins!**
-""", inline=False)
-        if reward:
-            embed.add_field(name="Reward", value=reward, inline=False)
+        embed = discord.Embed(
+            title="🍵 Green Tea Game Registration",
+            description=f"🔹 **React with 🍵 to join the game!**\n🔹 The game will start in **{reg_time} seconds**.\n\n"
+                        "📜 **Game Rules:**\n"
+                        "1️⃣ A word fragment will be given (e.g., `ing`)\n"
+                        "2️⃣ Reply with a real word containing that fragment (e.g., `King`)\n"
+                        "3️⃣ First, second, and third correct answers get points!\n\n"
+                        "🏆 **Scoring:**\n"
+                        "🥇 First: **5 points**\n"
+                        "🥈 Second: **3 points**\n"
+                        "🥉 Third: **1 point**\n\n"
+                        "🔸 **First to reach {point_goal} points wins!**",
+            color=discord.Color.green()
+        )
         message = await interaction.channel.send(embed=embed)
         await message.add_reaction("🍵")
 
-        # Acknowledge the interaction
-        await interaction.response.send_message("Green Tea game started! React with 🍵 to join.", ephemeral=True)
-
-        # Wait for registration
-        await asyncio.sleep(self.registration_time)
-
-        # Check registered players
+        await asyncio.sleep(reg_time)
         message = await interaction.channel.fetch_message(message.id)
-        reaction = discord.utils.get(message.reactions, emoji="🍵")
-        if reaction:
-            self.registered_players = [user async for user in reaction.users() if not user.bot]
 
-        if not self.registered_players:
-            await interaction.followup.send("No one registered for the game. Game canceled.", ephemeral=True)
-            self.active_game = False
+        for reaction in message.reactions:
+            if str(reaction.emoji) == "🍵":
+                async for user in reaction.users():
+                    if user != self.bot.user:
+                        self.green_tea_players.append(user)
+
+        if not self.green_tea_players:
+            await interaction.channel.send("⚠️ No players joined. Game cancelled.")
+            self.green_tea_active = False
             return
 
-        # Send registered players embed
-        embed = discord.Embed(title="🍵 Registered Players 🍵", color=discord.Color.green())
-        embed.description = "\n".join([player.mention for player in self.registered_players])
-        await interaction.followup.send(embed=embed)
+        await interaction.channel.send(f"✅ **{len(self.green_tea_players)} players joined:**\n" + "\n".join(f"- {p.mention}" for p in self.green_tea_players))
+        asyncio.create_task(self.green_tea_game(interaction.channel))
 
-        # Start the game
-        await self.play_game(interaction)
+    async def green_tea_game(self, channel):
+        scores = {player: 0 for player in self.green_tea_players}
 
-    # Function to play the game
-    async def play_game(self, interaction: discord.Interaction):
-        while self.active_game:
-            # Generate a random word fragment
-            self.current_fragment = self.generate_word_fragment()
-            self.used_answers = set()  # Reset used answers for the new fragment
-            await interaction.channel.send(f"🔍 Word Fragment: `{self.current_fragment}`")
+        while self.green_tea_active and max(scores.values(), default=0) < self.green_tea_target_points:
+            available_fragments = [w for w in self.common_fragments if w not in self.used_fragments]
+            if not available_fragments:
+                await channel.send("🔄 No more unique word fragments available. Game over.")
+                break
 
-            # Wait for answers
-            winners = []
-            start_time = asyncio.get_event_loop().time()
+            word_fragment = random.choice(available_fragments)
+            self.used_fragments.add(word_fragment)
+            await channel.send(f"🔤 **Next Fragment:** `{word_fragment}`\n(Reply with a word containing this!)")
 
             def check(m):
-                return (
-                    m.author in self.registered_players  # Only registered players can answer
-                    and self.current_fragment.lower() in m.content.lower()
-                    and m.content.lower() in self.get_real_words()
-                    and m.author not in winners
-                    and m.content.lower() not in self.used_answers
-                )
+                return (m.author in self.green_tea_players 
+                        and word_fragment.lower() in m.content.lower() 
+                        and m.content.lower() not in self.used_words)
 
-            while len(winners) < 3:
-                try:
-                    # Wait for correct answers
-                    msg = await self.bot.wait_for("message", check=check, timeout=10 - (asyncio.get_event_loop().time() - start_time))
-                    winners.append(msg.author)
-                    self.used_answers.add(msg.content.lower())  # Track used answers
-                    if len(winners) == 1:
-                        await msg.add_reaction("🥇")
-                        self.scores[msg.author] = self.scores.get(msg.author, 0) + 5
-                    elif len(winners) == 2:
-                        await msg.add_reaction("🥈")
-                        self.scores[msg.author] = self.scores.get(msg.author, 0) + 3
-                    elif len(winners) == 3:
-                        await msg.add_reaction("🥉")
-                        self.scores[msg.author] = self.scores.get(msg.author, 0) + 1
-                except asyncio.TimeoutError:
-                    break
+            responses = []
+            try:
+                while True:
+                    msg = await self.bot.wait_for("message", timeout=10, check=check)
+                    if msg.author not in [r[0] for r in responses]:  
+                        responses.append((msg.author, msg.content, msg))
+                        self.used_words.add(msg.content.lower())
+                        await msg.add_reaction(["🥇", "🥈", "🥉"][len(responses)-1])
+            except asyncio.TimeoutError:
+                pass
 
-            # Update leaderboard
-            if winners:
-                await self.update_leaderboard(interaction)
-            else:
-                await interaction.channel.send("No one answered correctly this round.")
+            for i, (author, _, _) in enumerate(responses[:3]):
+                scores[author] += [5, 3, 1][i]
 
-            # Check if someone reached the target score
-            for player, score in self.scores.items():
-                if score >= self.target_score:
-                    await interaction.channel.send(f"🎉 {player.mention} has reached the target score of {self.target_score}! Game over.")
-                    self.active_game = False
-                    await self.final_leaderboard(interaction)
-                    return
+            embed = discord.Embed(title="🏆 Round Results!", color=discord.Color.gold())
+            leaderboard = "\n".join(f"**{i+1}. {player.name}** - {points} pts" for i, (player, points) in enumerate(sorted(scores.items(), key=lambda x: x[1], reverse=True)))
+            embed.add_field(name="📊 Current Standings:", value=leaderboard, inline=False)
 
-            # Wait 1 second before the next fragment
-            await asyncio.sleep(1)
+            await channel.send(embed=embed)
 
-    # Function to generate a random word fragment
-    def generate_word_fragment(self):
-        fragments = [
-            "ing", "ate", "tion", "ment", "able", "ness", "ify", "est", "less", "ful",
-            "ly", "er", "ist", "ism", "ous", "ive", "ize", "age", "al", "ance", "ence",
-            "dom", "hood", "ship", "ty", "ity", "ment", "ness", "ship", "th", "ward",
-            "wise", "y", "able", "ible", "al", "ant", "ary", "ful", "ic", "ious", "ish",
-            "ive", "less", "like", "ous", "some", "worthy", "en", "ify", "ate", "en", "fy"
-        ]
-        return random.choice(fragments)
+        winner = max(scores, key=scores.get)
+        await channel.send(f"🎉 **{winner.mention} wins the Green Tea game!**")
+        self.green_tea_active = False
+        self.used_fragments.clear()
+        self.used_words.clear()
 
-    # Function to get real words (dummy implementation)
-    def get_real_words(self):
-        return [
-            "king", "sing", "celebration", "happiness", "beautiful", "establish", "lessen",
-            "greatest", "hopeful", "less", "establishment", "establishing", "amazing", "lovely",
-            "powerful", "creative", "destruction", "happiness", "friendship", "childhood"
-        ]
-
-    # Function to update the leaderboard
-    async def update_leaderboard(self, interaction: discord.Interaction):
-        embed = discord.Embed(title="🏆 Leaderboard 🏆", color=discord.Color.gold())
-        sorted_scores = sorted(self.scores.items(), key=lambda x: x[1], reverse=True)
-        for i, (player, score) in enumerate(sorted_scores):
-            embed.add_field(name=f"{i + 1}. {player.name}", value=f"Score: {score}", inline=False)
-        await interaction.channel.send(embed=embed)
-
-    # Function to display the final leaderboard
-    async def final_leaderboard(self, interaction: discord.Interaction):
-        embed = discord.Embed(title="🏆 Final Leaderboard 🏆", color=discord.Color.red())
-        sorted_scores = sorted(self.scores.items(), key=lambda x: x[1], reverse=True)
-        for i, (player, score) in enumerate(sorted_scores):
-            embed.add_field(name=f"{i + 1}. {player.name}", value=f"Score: {score}", inline=False)
-        await interaction.channel.send(embed=embed)
-
-    # Slash command to end the game
-    @app_commands.command(name="greentea-end", description="End the Green Tea game")
+    @app_commands.command(name="greentea_end", description="Stop an ongoing Green Tea game")
     async def greentea_end(self, interaction: discord.Interaction):
-        if not self.active_game:
-            await interaction.response.send_message("No Green Tea game is running at the moment.", ephemeral=True)
+        if not self.green_tea_active:
+            await interaction.response.send_message("❌ No active Green Tea game to stop!", ephemeral=True)
+            return
+        self.green_tea_active = False
+        await interaction.response.send_message("🛑 Green Tea game has been stopped.")
+
+    @app_commands.command(name="greentea_leaderboard", description="Show the leaderboard for the current game or lifetime stats")
+    async def greentea_leaderboard(self, interaction: discord.Interaction):
+        if not self.green_tea_active:
+            await interaction.response.send_message("❌ No active Green Tea game. Use `/greentea_start` to start one!", ephemeral=True)
             return
 
-        self.active_game = False
-        await interaction.response.send_message("The Green Tea game has been ended.", ephemeral=True)
-        await self.final_leaderboard(interaction)
+        scores = {player: 0 for player in self.green_tea_players}
+        embed = discord.Embed(title="🏆 Leaderboard", color=discord.Color.gold())
+        leaderboard = "\n".join(f"**{i+1}. {player.name}** - {points} pts" for i, (player, points) in enumerate(sorted(scores.items(), key=lambda x: x[1], reverse=True)))
+        embed.add_field(name="📊 Current Standings:", value=leaderboard, inline=False)
+        await interaction.response.send_message(embed=embed)
 
-# Cog setup function
+    @app_commands.command(name="greentea_single", description="Start an individual Green Tea game")
+    async def greentea_single(self, interaction: discord.Interaction):
+        if self.green_tea_active:
+            await interaction.response.send_message("❌ A Green Tea game is already running!", ephemeral=True)
+            return
+
+        self.green_tea_active = True
+        self.green_tea_players = [interaction.user]
+        self.green_tea_target_points = 10
+
+        await interaction.response.send_message("🎮 Starting an individual Green Tea game...")
+        asyncio.create_task(self.green_tea_single_game(interaction.channel))
+
+    async def green_tea_single_game(self, channel):
+        lives = {player: 2 for player in self.green_tea_players}
+
+        while self.green_tea_active and len(lives) > 1:
+            available_fragments = [w for w in self.common_fragments if w not in self.used_fragments]
+            if not available_fragments:
+                await channel.send("🔄 No more unique word fragments available. Game over.")
+                break
+
+            word_fragment = random.choice(available_fragments)
+            self.used_fragments.add(word_fragment)
+            await channel.send(f"🔤 **Next Fragment:** `{word_fragment}`\n(Reply with a word containing this!)")
+
+            def check(m):
+                return (m.author in lives 
+                        and word_fragment.lower() in m.content.lower() 
+                        and m.content.lower() not in self.used_words)
+
+            try:
+                msg = await self.bot.wait_for("message", timeout=10, check=check)
+                self.used_words.add(msg.content.lower())
+                await msg.add_reaction("✅")
+            except asyncio.TimeoutError:
+                for player in lives:
+                    lives[player] -= 1
+                    if lives[player] == 0:
+                        del lives[player]
+                        await channel.send(f"❌ {player.mention} is out of lives!")
+
+        winner = list(lives.keys())[0]
+        await channel.send(f"🎉 **{winner.mention} wins the individual Green Tea game!**")
+        self.green_tea_active = False
+        self.used_fragments.clear()
+        self.used_words.clear()
+
+# Add the cog to the bot
 async def setup(bot):
     await bot.add_cog(GreenTea(bot))
