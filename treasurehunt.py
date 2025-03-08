@@ -2,9 +2,7 @@ import discord
 from discord.ext import commands
 from discord import app_commands
 import random
-import asyncio
 import sqlite3
-from datetime import datetime
 
 # SQLite database configuration
 DATABASE_FILE = "treasurehunt.db"
@@ -13,7 +11,6 @@ class TreasureHunt(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
         self.active_hunt = False
-        self.current_event_code = None  # Unique event code for the current hunt
         self.codes = {}  # Stores codes and their locations
         self.leaderboard = {}  # Tracks players' progress
         self.hints = {}  # Stores hints for each code
@@ -27,24 +24,48 @@ class TreasureHunt(commands.Cog):
         suffix = "".join(random.choices(letters, k=3))
         return f"{prefix}AFW{suffix}"
 
-    # Function to generate a unique event code
-    def generate_event_code(self):
-        return f"TH{random.randint(100, 999)}"
-
     # Function to initialize the database
     def initialize_db(self):
         conn = sqlite3.connect(DATABASE_FILE)
         cursor = conn.cursor()
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS treasurehunt (
-                event_code TEXT,
-                code TEXT,
-                location TEXT,
-                found_by TEXT
+                channel_id INTEGER PRIMARY KEY,
+                message_id INTEGER,
+                content TEXT,
+                is_embed INTEGER
             )
         """)
         conn.commit()
         conn.close()
+
+    # Function to save a sticky message to the database
+    def save_sticky_message(self, channel_id, message_id, content, is_embed=False):
+        conn = sqlite3.connect(DATABASE_FILE)
+        cursor = conn.cursor()
+        cursor.execute("""
+            INSERT OR REPLACE INTO treasurehunt (channel_id, message_id, content, is_embed)
+            VALUES (?, ?, ?, ?)
+        """, (channel_id, message_id, content, int(is_embed)))
+        conn.commit()
+        conn.close()
+
+    # Function to delete a sticky message from the database
+    def delete_sticky_message(self, channel_id):
+        conn = sqlite3.connect(DATABASE_FILE)
+        cursor = conn.cursor()
+        cursor.execute("DELETE FROM treasurehunt WHERE channel_id = ?", (channel_id,))
+        conn.commit()
+        conn.close()
+
+    # Function to get a sticky message from the database
+    def get_sticky_message(self, channel_id):
+        conn = sqlite3.connect(DATABASE_FILE)
+        cursor = conn.cursor()
+        cursor.execute("SELECT message_id, content, is_embed FROM treasurehunt WHERE channel_id = ?", (channel_id,))
+        result = cursor.fetchone()
+        conn.close()
+        return result
 
     # Slash command to set up the treasure hunt
     @app_commands.command(name="treasurehunt-setup", description="Set up the treasure hunt")
@@ -57,23 +78,13 @@ class TreasureHunt(commands.Cog):
         self.logs_channel = logs_channel
         await interaction.response.send_message(f"✅ Treasure hunt setup complete!\nStaff Channel: {staff_channel.mention}\nLogs Channel: {logs_channel.mention}", ephemeral=True)
 
-    # Slash command to send the treasure hunt rules embed
-    @app_commands.command(name="treasurehunt-embed", description="Send the treasure hunt rules embed")
-    async def treasurehunt_embed(self, interaction: discord.Interaction):
-        embed = discord.Embed(title="🎉 Treasure Hunt Rules", color=discord.Color.red())
-        embed.add_field(name="What is the treasure?", value="The codes hidden within this server.", inline=False)
-        embed.add_field(name="How to IDENTIFY the code?", value="The code will be a 9-letter alphanumeric word with 'AFW' in the middle (e.g., ABCAFW123).", inline=False)
-        embed.add_field(name="Where to find?", value="The code will be found throughout this server, maybe in channel topics, pinned messages, or embeds!", inline=False)
-        embed.add_field(name="How to submit?", value="Use `/treasurehunt-submit` to submit your findings.", inline=False)
-        embed.add_field(name="Need a hint?", value="Admins can use `/treasurehunt-hint` to provide hints.", inline=False)
-        await interaction.response.send_message(embed=embed)
-
     # Slash command to start the treasure hunt
     @app_commands.command(name="treasurehunt-start", description="Start the treasure hunt")
     @app_commands.describe(
-        num_codes="The number of codes to generate (default: 10)"
+        num_codes="The number of codes to generate (default: 10)",
+        channel_ids="Comma-separated list of channel IDs where codes will be hidden"
     )
-    async def treasurehunt_start(self, interaction: discord.Interaction, num_codes: int = 10):
+    async def treasurehunt_start(self, interaction: discord.Interaction, num_codes: int = 10, channel_ids: str = None):
         if self.active_hunt:
             await interaction.response.send_message("A treasure hunt is already running!", ephemeral=True)
             return
@@ -82,37 +93,61 @@ class TreasureHunt(commands.Cog):
             await interaction.response.send_message("❌ Please set up the treasure hunt first using `/treasurehunt-setup`.", ephemeral=True)
             return
 
+        if not channel_ids:
+            await interaction.response.send_message("❌ Please provide a list of channel IDs.", ephemeral=True)
+            return
+
+        # Parse channel IDs
+        channel_ids = [int(id.strip()) for id in channel_ids.split(",")]
+        public_channels = []
+        for channel_id in channel_ids:
+            channel = interaction.guild.get_channel(channel_id)
+            if channel and isinstance(channel, discord.TextChannel):
+                public_channels.append(channel)
+
+        if not public_channels:
+            await interaction.response.send_message("❌ No valid text channels found. Please check the channel IDs.", ephemeral=True)
+            return
+
+        # Acknowledge the interaction immediately
+        await interaction.response.send_message("Starting the treasure hunt...", ephemeral=True)
+
         self.active_hunt = True
-        self.current_event_code = self.generate_event_code()
         self.codes = {}
         self.leaderboard = {}
         self.hints = {}
 
-        # Generate codes and hide them in random public channels
-        public_channels = [channel for channel in interaction.guild.text_channels if not channel.is_private]
+        # Generate codes and assign them to channels
         for _ in range(num_codes):
             code = self.generate_code()
             location = random.choice(public_channels)
             self.codes[code] = location
             self.hints[code] = f"Hint: Look in {location.mention}."
 
-            # Hide the code in the channel (e.g., in the topic or a pinned message)
-            await location.edit(topic=f"Treasure Hunt Code: {code}")
-
-        # Send the codes to the staff channel
+        # Send the codes to the staff channel for manual hiding
         embed = discord.Embed(title="🔍 Treasure Hunt Codes", color=discord.Color.red())
         for code, location in self.codes.items():
-            embed.add_field(name=code, value=location.mention, inline=False)
+            embed.add_field(name=code, value=f"Location: {location.mention}", inline=False)
         await self.staff_channel.send(embed=embed)
 
         # Send logs
         embed = discord.Embed(title="🎉 Treasure Hunt Started", color=discord.Color.red())
-        embed.add_field(name="Event Code", value=self.current_event_code, inline=False)
         embed.add_field(name="Number of Codes", value=num_codes, inline=False)
         await self.logs_channel.send(embed=embed)
 
-        # Send the rules embed
-        await self.treasurehunt_embed(interaction)
+    # Slash command to display the rules
+    @app_commands.command(name="treasurehunt-rules", description="Display the treasure hunt rules")
+    async def treasurehunt_rules(self, interaction: discord.Interaction):
+        embed = discord.Embed(title="🎉 Treasure Hunt Rules", color=discord.Color.red())
+        embed.add_field(name="What is the treasure?", value="The codes hidden within this server.", inline=False)
+        embed.add_field(name="How to IDENTIFY the code?", value="The code will be a 9-letter alphanumeric word with 'AFW' in the middle (e.g., ABCAFW123).", inline=False)
+        embed.add_field(name="Where to find?", value="The code will be found throughout this server, maybe in channel descriptions, old messages, or other hidden places!", inline=False)
+        embed.add_field(name="How to submit?", value="Use `/treasurehunt-submit` to submit your findings.", inline=False)
+        embed.add_field(name="Need a hint?", value="Admins can use `/treasurehunt-hint` to provide hints.", inline=False)
+
+        # Send the embed without replying to the command
+        await interaction.channel.send(embed=embed)
+        await interaction.response.send_message("Rules sent!", ephemeral=True)
 
     # Slash command to submit a code
     @app_commands.command(name="treasurehunt-submit", description="Submit a code for the treasure hunt")
@@ -130,7 +165,6 @@ class TreasureHunt(commands.Cog):
                 embed = discord.Embed(title="🔍 Code Found", color=discord.Color.red())
                 embed.add_field(name="Player", value=interaction.user.mention, inline=False)
                 embed.add_field(name="Code", value=code, inline=False)
-                embed.add_field(name="Event Code", value=self.current_event_code, inline=False)
                 await self.logs_channel.send(embed=embed)
             else:
                 await interaction.response.send_message("This code has already been found.", ephemeral=True)
@@ -139,24 +173,27 @@ class TreasureHunt(commands.Cog):
 
     # Slash command to provide a hint
     @app_commands.command(name="treasurehunt-hint", description="Provide a hint for a code")
-    async def treasurehunt_hint(self, interaction: discord.Interaction):
+    @app_commands.describe(
+        code="The code to get a hint for"
+    )
+    async def treasurehunt_hint(self, interaction: discord.Interaction, code: str):
         if not self.active_hunt:
             await interaction.response.send_message("No treasure hunt is running at the moment.", ephemeral=True)
             return
 
-        hint = random.choice(list(self.hints.values()))
-        await interaction.response.send_message(hint, ephemeral=True)
+        if code in self.hints:
+            await interaction.response.send_message(self.hints[code], ephemeral=True)
+        else:
+            await interaction.response.send_message("❌ Invalid code. Please check the code and try again.", ephemeral=True)
 
     # Slash command to display the leaderboard
     @app_commands.command(name="treasurehunt-leaderboard", description="Display the treasure hunt leaderboard")
-    async def treasurehunt_leaderboard(self, interaction: discord.Interaction, event_code: str = None):
-        if not self.active_hunt and not event_code:
+    async def treasurehunt_leaderboard(self, interaction: discord.Interaction):
+        if not self.active_hunt:
             await interaction.response.send_message("No treasure hunt is running at the moment.", ephemeral=True)
             return
 
         embed = discord.Embed(title="🏆 Treasure Hunt Leaderboard", color=discord.Color.red())
-        if event_code:
-            embed.add_field(name="Event Code", value=event_code, inline=False)
         for user_id, code in self.leaderboard.items():
             user = await self.bot.fetch_user(user_id)
             embed.add_field(name=user.name, value=f"Found: `{code}`", inline=False)
@@ -176,7 +213,6 @@ class TreasureHunt(commands.Cog):
 
         # Send logs
         embed = discord.Embed(title="🔚 Treasure Hunt Ended", color=discord.Color.red())
-        embed.add_field(name="Event Code", value=self.current_event_code, inline=False)
         await self.logs_channel.send(embed=embed)
 
         await interaction.response.send_message("The treasure hunt has ended. All codes are now expired.", ephemeral=True)
