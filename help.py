@@ -9,33 +9,36 @@ class Help(commands.Cog):
     # Slash command to display the help embed
     @app_commands.command(name="help", description="List all commands and their descriptions")
     async def help(self, interaction: discord.Interaction):
-        embed = discord.Embed(title="🎉 AFW Grand Commands", color=discord.Color.red())
+        embed = discord.Embed(
+            title="🌟 AFW Grand Commands 🌟",
+            description="Here's a list of all available commands and their descriptions.",
+            color=discord.Color.blue()
+        )
 
         # AFW Commands
         embed.add_field(
-            name="🛌 AFW Commands",
+            name="🛌 **AFW Commands**",
             value="""
-            `/afk <reason>` - Set your AFK status.
-            `/afklist` - Check who is AFK.
+            `J!afk <reason>` - Set your AFK status.
+            `J!afklist` - Check who is AFK.
             """,
             inline=False
         )
 
         # GreenTea Commands
         embed.add_field(
-            name="🍵 GreenTea Commands",
+            name="🍵 **GreenTea Commands**",
             value="""
             `/greentea-start` - Start the Green Tea game.
-            `/greentea-submit` - Submit a word for the Green Tea game.
             `/greentea-leaderboard` - Display the Green Tea game leaderboard.
             `/greentea-end` - End the Green Tea game.
             """,
-            inline=False
+            inline=True
         )
 
         # TreasureHunt Commands
         embed.add_field(
-            name="🔍 TreasureHunt Commands",
+            name="🔍 **TreasureHunt Commands**",
             value="""
             `/treasurehunt-setup` - Set up the treasure hunt.
             `/treasurehunt-start` - Start the treasure hunt.
@@ -43,38 +46,40 @@ class Help(commands.Cog):
             `/treasurehunt-hint` - Provide a hint for a code.
             `/treasurehunt-leaderboard` - Display the treasure hunt leaderboard.
             `/treasurehunt-end` - End the treasure hunt.
-            """,
+            `/treasurehunt-rules` - Shows the rules of treasurehunt
+  """,
             inline=False
         )
 
         # Sticky Commands
         embed.add_field(
-            name="📌 Sticky Commands",
+            name="📌 **Sticky Commands**",
             value="""
-            `/sticky-add <channel> <message>` - Add a sticky message to a channel.
-            `/embedsticky-add <channel>` - Add an embed sticky message to a channel.
-            `/unstick <message_link>` - Remove a sticky message.
+            `/sticky-add` - Add a sticky message to a channel.
+            `/unstick` - Remove a sticky message.
             """,
             inline=False
         )
 
         # Utility Commands
         embed.add_field(
-            name="🛠️ Utility Commands",
+            name="🛠️ **Utility Commands**",
             value="""
-            `/avatar <user>` - Show the avatar of a user.
-            `/userinfo <user>` - Show information about a user.
+            `/avatar` - Show the avatar of a user.
+            `/userinfo` - Show information about a user.
             `/serverboosts` - Show server boost information.
             `/serverinfo` - Show information about the server.
-            `/poll <question>` - Create a poll.
-            `/role-users <role>` - Show users with a specific role.
+            `/poll` - Create a poll.
+            `/role-users` - Show users with a specific role.
             """,
             inline=False
         )
 
-        # Set server avatar in the embed
-        if interaction.guild.icon:
-            embed.set_thumbnail(url=interaction.guild.icon.url)
+        # Set a custom image in the top right corner
+        embed.set_thumbnail(url="https://cdn.discordapp.com/attachments/1251109288324104283/1347758268419670097/channel_banner.png?ex=67ccfd33&is=67cbabb3&hm=2b613c0554ec8265cd00df03b00a98d396e99e3190f859e622484881e39b34c6&")  # Replace with your image URL
+
+        # Add a footer
+        embed.set_footer(text="Use /help for more information! | AFW Bot")
 
         await interaction.response.send_message(embed=embed)
 
