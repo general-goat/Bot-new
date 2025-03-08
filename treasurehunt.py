@@ -217,6 +217,6 @@ class TreasureHunt(commands.Cog):
 
         await interaction.response.send_message("The treasure hunt has ended. All codes are now expired.", ephemeral=True)
 
-# Cog setup function
+# Cog setup functions
 async def setup(bot):
     await bot.add_cog(TreasureHunt(bot))
