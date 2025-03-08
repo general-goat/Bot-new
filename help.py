@@ -32,6 +32,7 @@ class Help(commands.Cog):
             `/greentea-start` - Start the Green Tea game.
             `/greentea-leaderboard` - Display the Green Tea game leaderboard.
             `/greentea-end` - End the Green Tea game.
+            `/greentea-single` - in developement plz dont try`
             """,
             inline=True
         )
@@ -76,7 +77,7 @@ class Help(commands.Cog):
         )
 
         # Set a custom image in the top right corner
-        embed.set_thumbnail(url="https://cdn.discordapp.com/attachments/1251109288324104283/1347758268419670097/channel_banner.png?ex=67ccfd33&is=67cbabb3&hm=2b613c0554ec8265cd00df03b00a98d396e99e3190f859e622484881e39b34c6&")  # Replace with your image URL
+        embed.set_thumbnail(url="https://cdn.discordapp.com/icons/1237101014214250648/a_04e38a5ec6fa6c196647e25653110334.gif?size=1024")  # Replace with your image URL
 
         # Add a footer
         embed.set_footer(text="Use /help for more information! | AFW Bot")
