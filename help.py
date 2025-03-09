@@ -32,9 +32,9 @@ class Help(commands.Cog):
             `/greentea-start` - Start the Green Tea game.
             `/greentea-leaderboard` - Display the Green Tea game leaderboard.
             `/greentea-end` - End the Green Tea game.
-            `/greentea-single` - in developement plz dont try`
+            `/greentea-single` - In development, please don't try.
             """,
-            inline=True
+            inline=False
         )
 
         # TreasureHunt Commands
@@ -47,8 +47,8 @@ class Help(commands.Cog):
             `/treasurehunt-hint` - Provide a hint for a code.
             `/treasurehunt-leaderboard` - Display the treasure hunt leaderboard.
             `/treasurehunt-end` - End the treasure hunt.
-            `/treasurehunt-rules` - Shows the rules of treasurehunt
-  """,
+            `/treasurehunt-rules` - Show the rules of the treasure hunt.
+            """,
             inline=False
         )
 
@@ -72,6 +72,13 @@ class Help(commands.Cog):
             `/serverinfo` - Show information about the server.
             `/poll` - Create a poll.
             `/role-users` - Show users with a specific role.
+            `/remind <time> <reminder>` - Set a reminder.
+            `/translate <text> <language>` - Translate text to a specified language.
+            `/coinflip` - Flip a coin.
+            `/customcommand <name> <response>` - Create a custom command (Staff only).
+            `/deletecommand <name>` - Delete a custom command (Staff only).
+            `/listcommands` - List all custom commands (Staff only).
+            `/feedback <feedback>` - Send feedback to the bot owner.
             """,
             inline=False
         )
@@ -79,8 +86,14 @@ class Help(commands.Cog):
         # Set a custom image in the top right corner
         embed.set_thumbnail(url="https://cdn.discordapp.com/icons/1237101014214250648/a_04e38a5ec6fa6c196647e25653110334.gif?size=1024")  # Replace with your image URL
 
-        # Add a footer
-        embed.set_footer(text="Use /help for more information! | AFW Bot")
+        # Add a footer with AFW branding
+        embed.set_footer(
+            text="AFW Bot | Empowering Your Server Since 2025",
+            icon_url="https://cdn.discordapp.com/icons/1237101014214250648/a_04e38a5ec6fa6c196647e25653110334.gif?size=1024"  # Replace with your server icon URL
+        )
+
+        # Add the banner at the bottom
+        embed.set_image(url="https://cdn.discordapp.com/attachments/1251109288324104283/1348105351882346577/channel_banner.png")
 
         await interaction.response.send_message(embed=embed)
 
