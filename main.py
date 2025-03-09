@@ -8,12 +8,13 @@ import treasurehunt  # Import the TreasureHunt cog
 import sticky  # Import the Sticky cog
 import roleusers  # Import the RoleUsers cog
 import help  # Import the Help cog
+import utility_commands  # Import the new UtilityCommands cog
 
 # Initialize the bot
 intents = discord.Intents.default()
 intents.members = True
 intents.message_content = True  # Enable message content intent
-bot = commands.Bot(command_prefix="J!", intents=intents)
+bot = commands.Bot(command_prefix="!", intents=intents)  # Prefix is irrelevant since we're using slash commands
 
 # Load cogs
 async def load_cogs():
@@ -24,6 +25,7 @@ async def load_cogs():
     await bot.add_cog(sticky.Sticky(bot))  # Load Sticky cog
     await bot.add_cog(roleusers.RoleUsers(bot))  # Load RoleUsers cog
     await bot.add_cog(help.Help(bot))  # Load Help cog
+    await bot.add_cog(utility_commands.UtilityCommands(bot))  # Load new UtilityCommands cog
 
 # Event: When the bot is ready
 @bot.event
@@ -38,5 +40,6 @@ async def on_ready():
         print(f"Error syncing slash commands: {e}")
 
 
+
 # Run the bot
-bot.run("MTMyNjA2NjE5MTg2MDc2MDU3Nw.GsJBbV.jhxfsVOnB4bmdi7cMSwK4Oz1Q7IAhGMnGUrvAI")
+bot.run("MTMyNjA2NjE5MTg2MDc2MDU3Nw.GsJBbV.jhxfsVOnB4bmdi7cMSwK4Oz1Q7IAhGMnGUrvAI"
