@@ -9,7 +9,8 @@ import sticky  # Import the Sticky cog
 import roleusers  # Import the RoleUsers cog
 import help  # Import the Help cog
 import utility_commands  # Import the new UtilityCommands cog
-
+import automod
+import reactionrole
 # Initialize the bot
 intents = discord.Intents.default()
 intents.members = True
@@ -26,7 +27,8 @@ async def load_cogs():
     await bot.add_cog(roleusers.RoleUsers(bot))  # Load RoleUsers cog
     await bot.add_cog(help.Help(bot))  # Load Help cog
     await bot.add_cog(utility_commands.UtilityCommands(bot))  # Load new UtilityCommands cog
-
+    await bot.add_cog(automod.AutoMod(bot))
+    await bot.add_cog(reactiontole.ReactionRoles(bot))
 # Event: When the bot is ready
 @bot.event
 async def on_ready():
