@@ -2,7 +2,6 @@ import discord
 from discord.ext import commands
 from discord import app_commands
 import sqlite3
-from googletrans import Translator
 import asyncio
 import random
 
@@ -47,20 +46,6 @@ class UtilityCommands(commands.Cog):
         await asyncio.sleep(time * 60)
         await interaction.followup.send(f"🔔 **Reminder for {interaction.user.mention}:** {reminder}")
 
-    # Translate command (Slash)
-    @app_commands.command(name="translate", description="Translate text to a specified language (default: English)")
-    @app_commands.describe(text="Text to translate", language="Target language code (e.g., 'es' for Spanish, default: 'en')")
-    async def translate(self, interaction: discord.Interaction, text: str, language: str = "en"):
-        try:
-            translation = self.translator.translate(text, dest=language)
-            embed = discord.Embed(
-                title="🌐 Translation",
-                description=f"**Original:** {text}\n**Translated ({language}):** {translation.text}",
-                color=discord.Color.blue()
-            )
-            await interaction.response.send_message(embed=embed)
-        except Exception as e:
-            await interaction.response.send_message(f"❌ **Error translating:** {e}")
 
     # Coinflip command (Slash)
     @app_commands.command(name="coinflip", description="Flip a coin")
