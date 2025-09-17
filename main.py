@@ -12,6 +12,7 @@ import utility_commands  # Import the new UtilityCommands cog
 import automod
 import reactionrole
 import Welcome
+import moderation
 # Initialize the bot
 intents = discord.Intents.default()
 intents.members = True
@@ -31,6 +32,7 @@ async def load_cogs():
     await bot.add_cog(automod.AutoMod(bot))
     await bot.add_cog(reactiontole.ReactionRoles(bot))
     await bot.add_cog(welcome.Welcome(bot))
+    await bot.add_cog(moderation.Moderation(bot))
 # Event: When the bot is ready
 @bot.event
 async def on_ready():
