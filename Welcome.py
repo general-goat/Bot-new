@@ -2,7 +2,7 @@ import discord
 from discord.ext import commands
 from datetime import datetime
 
-WELCOME_CHANNEL_ID = 123456789012345678  # put your welcome channel ID here
+WELCOME_CHANNEL_ID = 1352353471919296522  # put your welcome channel ID here
 WELCOME_IMAGE = "https://i.ibb.co/0fj7G2J/black-bg.png"  # black background image
 
 class Welcome(commands.Cog):
